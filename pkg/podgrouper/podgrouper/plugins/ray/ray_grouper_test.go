@@ -29,20 +29,22 @@ func TestRayAutoscalingWorkerMinimum(t *testing.T) {
 		name        string
 		autoscaling interface{}
 		minimum     interface{}
+		replicas    int64
 		hosts       int64
 		wantWorkers int32
 	}{
-		{"zero minimum", true, int64(0), 1, 0},
-		{"omitted minimum", true, nil, 1, 0},
-		{"zero minimum with multiple hosts", true, int64(0), 2, 0},
-		{"positive minimum with multiple hosts", true, int64(2), 2, 4},
-		{"disabled autoscaling", false, int64(0), 1, 5},
-		{"omitted autoscaling", nil, int64(0), 2, 10},
-		{"minimum without autoscaling", nil, int64(2), 1, 2},
+		{"zero minimum", true, int64(0), 5, 1, 0},
+		{"omitted minimum", true, nil, 3, 1, 0},
+		{"zero minimum with multiple hosts", true, int64(0), 4, 2, 0},
+		{"positive minimum with multiple hosts", true, int64(2), 6, 2, 4},
+		{"minimum equals desired replicas", true, int64(2), 2, 1, 2},
+		{"disabled autoscaling", false, int64(0), 5, 1, 5},
+		{"omitted autoscaling", nil, int64(0), 3, 2, 6},
+		{"minimum without autoscaling", nil, int64(2), 4, 1, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			elastic := map[string]interface{}{"groupName": "elastic", "replicas": int64(5), "numOfHosts": tt.hosts}
+			elastic := map[string]interface{}{"groupName": "elastic", "replicas": tt.replicas, "numOfHosts": tt.hosts}
 			if tt.minimum != nil {
 				elastic["minReplicas"] = tt.minimum
 			}

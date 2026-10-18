@@ -223,8 +223,8 @@ func calcJobNumOfPodsAndSubGroups(topOwner *unstructured.Unstructured) (int32, [
 
 		workerGroupMinReplicas := int32(groupDesiredReplicas * numOfHosts)
 		if autoscaling || groupMinReplicas > 0 {
-			// Autoscaling clusters may start with no workers, including when
-			// minReplicas is omitted and defaults to zero.
+			// Autoscaling uses minReplicas for the subgroup minimum, even when
+			// it is zero or omitted, regardless of the desired replica count.
 			workerGroupMinReplicas = int32(groupMinReplicas * numOfHosts)
 		}
 		minReplicas += workerGroupMinReplicas
