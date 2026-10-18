@@ -31,14 +31,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
-	schedulingv1alpha2 "github.com/kai-scheduler/KAI-scheduler/pkg/apis/scheduling/v1alpha2"
-	commonconstants "github.com/kai-scheduler/KAI-scheduler/pkg/common/constants"
-	"github.com/kai-scheduler/KAI-scheduler/pkg/common/resources"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/bindrequest_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/common_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/pod_status"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/resource_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/storageclaim_info"
+	commonconstants "github.com/kai-scheduler/api/constants"
+	schedulingv1alpha2 "github.com/kai-scheduler/api/scheduling/v1alpha2"
+	"github.com/kai-scheduler/api/utilities/resources"
 )
 
 func TestRequestedGPUComputeSharingMode(t *testing.T) {
@@ -817,6 +817,19 @@ func TestPodInfo_Clone_ResourceClaimInfo(t *testing.T) {
 	assert.DeepEqual(t, alloc, clonedAlloc.Allocation)
 	assert.Assert(t, cloned.ResourceClaimInfo["gpu-claim"].Allocation != pi.ResourceClaimInfo["gpu-claim"].Allocation,
 		"Clone should copy Allocation, not share pointer")
+}
+
+func TestPodInfo_Clone_SharesOnlyTheRequestVector(t *testing.T) {
+	pi := createPodInfoWithGPU()
+	originalAcceptedVector := pi.AcceptedResourceVector.Clone()
+
+	cloned := pi.Clone()
+
+	assert.Assert(t, &cloned.ResReqVector[0] == &pi.ResReqVector[0], "Clone should share the request vector")
+
+	cloned.AcceptedResourceVector.Set(resource_info.GPUIndex, 7)
+
+	assert.DeepEqual(t, originalAcceptedVector, pi.AcceptedResourceVector)
 }
 
 func TestPodInfo_ShouldAllocate(t *testing.T) {

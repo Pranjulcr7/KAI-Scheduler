@@ -8,12 +8,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	schedulingv1alpha2 "github.com/kai-scheduler/KAI-scheduler/pkg/apis/scheduling/v1alpha2"
-	commonconstants "github.com/kai-scheduler/KAI-scheduler/pkg/common/constants"
 	schedapi "github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/bindrequest_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/common_info"
@@ -23,6 +22,8 @@ import (
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/resource_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/framework"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/test_utils/nodes_fake"
+	commonconstants "github.com/kai-scheduler/api/constants"
+	schedulingv1alpha2 "github.com/kai-scheduler/api/scheduling/v1alpha2"
 )
 
 // numaZone builds a NUMA zone spec with the given per-resource Available quantities. In tests all
@@ -465,7 +466,9 @@ func TestInCycleReservation(t *testing.T) {
 	avail := func() int64 { return zoneAvail(node.NumaTopology, 0, "cpu") }
 
 	first := makeGuaranteedTask("first", map[string]string{"cpu": "3"})
-	first.NUMAPlacement = pp.placement(first, node) // stamped before the op, as the allocation path does
+	placement, err := pp.placement(first, node)
+	require.NoError(t, err)
+	first.NUMAPlacement = placement
 	pp.allocate(&framework.Event{Task: first})
 	assert.Equal(t, int64(1), avail(), "zone charged by the first pod")
 	assert.Equal(t, []int{0}, first.NUMAPlacement.ZoneIndices(), "placement recorded on the task (zone 0)")
@@ -488,7 +491,7 @@ func TestAllocateReusesExistingPlacement(t *testing.T) {
 	))
 	task := makeGuaranteedTask("seeded", map[string]string{"cpu": "3"})
 	task.NUMAPlacement = pod_info.NUMAPlacement{
-		{ZoneIndex: 1, Amount: v1.ResourceList{"cpu": resource.MustParse("3")}},
+		Zones: []pod_info.ZonePlacement{{ZoneIndex: 1, Amount: v1.ResourceList{"cpu": resource.MustParse("3")}}},
 	}
 
 	pp.allocate(&framework.Event{Task: task})
@@ -524,7 +527,7 @@ func TestPlacementFromObserved(t *testing.T) {
 
 	t.Run("unknown zone id voids the whole placement", func(t *testing.T) {
 		got := placementFromRecord([]schedulingv1alpha2.NUMAZonePlacement{observedZone("node-0", "1"), observedZone("node-9", "1")}, topo)
-		assert.Nil(t, got, "a missing zone makes the placement unknown")
+		assert.True(t, got.IsEmpty(), "a missing zone makes the placement unknown")
 	})
 }
 
@@ -588,7 +591,7 @@ func TestSeedObservedPlacements(t *testing.T) {
 
 	alreadyPlaced := makeGuaranteedTask("already", map[string]string{"cpu": "2"})
 	alreadyPlaced.Pod.Annotations = map[string]string{commonconstants.NumaPlacementObserved: observedAnnotation(observedZone("node-1", "2"))}
-	alreadyPlaced.NUMAPlacement = pod_info.NUMAPlacement{{ZoneIndex: 0, Amount: v1.ResourceList{"cpu": resource.MustParse("2")}}}
+	alreadyPlaced.NUMAPlacement = pod_info.NUMAPlacement{Zones: []pod_info.ZonePlacement{{ZoneIndex: 0, Amount: v1.ResourceList{"cpu": resource.MustParse("2")}}}}
 
 	noRecord := makeGuaranteedTask("none", map[string]string{"cpu": "2"})
 

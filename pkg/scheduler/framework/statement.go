@@ -25,14 +25,15 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	schedulingv1alpha2 "github.com/kai-scheduler/KAI-scheduler/pkg/apis/scheduling/v1alpha2"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/bindrequest_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/common_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/eviction_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/node_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/pod_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/pod_status"
+	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/api/podgroup_info"
 	"github.com/kai-scheduler/KAI-scheduler/pkg/scheduler/log"
+	schedulingv1alpha2 "github.com/kai-scheduler/api/scheduling/v1alpha2"
 )
 
 type Statement struct {
@@ -230,7 +231,7 @@ func (s *Statement) Pipeline(task *pod_info.PodInfo, hostname string, updateTask
 		taskOnNodeGPUGroups := taskOnNode.GPUGroupIDs()
 		gpuPlacementChanged = len(taskGPUGroups) > 0 && task.IsSharedGPUAllocation() &&
 			!slices.Equal(taskGPUGroups, []string{"-1"}) && !slices.Equal(taskGPUGroups, taskOnNodeGPUGroups)
-		numaPlacementChanged = len(task.NUMAPlacement) > 0 &&
+		numaPlacementChanged = !task.NUMAPlacement.IsEmpty() &&
 			!task.NUMAPlacement.Equal(taskOnNode.NUMAPlacement)
 	}
 
@@ -602,6 +603,16 @@ func (s *Statement) Commit() error {
 	}
 
 	var err error
+	type evictionEventKey struct {
+		podGroup common_info.PodGroupID
+		action   string
+	}
+	committedEvictions := map[evictionEventKey]*podgroup_info.PodGroupInfo{}
+	defer func() {
+		for key, podGroup := range committedEvictions {
+			s.ssn.Cache.RecordPodGroupEvictionEvent(podGroup, key.action)
+		}
+	}()
 
 	log.InfraLogger.V(4).Infof("Committing operations ...")
 	for i, op := range s.operations {
@@ -617,6 +628,9 @@ func (s *Statement) Commit() error {
 			if err = s.commitEvict(taskInfo, evictOp); err != nil {
 				log.InfraLogger.Errorf("Failed to evict task <%v/%v>, error: <%v>",
 					taskInfo.Namespace, taskInfo.Name, err)
+			} else {
+				key := evictionEventKey{podGroup: taskInfo.Job, action: evictOp.evictionMetadata.Action}
+				committedEvictions[key] = s.ssn.ClusterInfo.PodGroupInfos[taskInfo.Job]
 			}
 		case pipeline:
 			log.InfraLogger.V(4).Infof("Pipelining task: %v/%v", taskInfo.Namespace, taskInfo.Name)
@@ -710,7 +724,7 @@ func (s *Statement) cleanupFailedAllocation(task *pod_info.PodInfo, node *node_i
 		task.Namespace, task.Name, node.Name)
 
 	// Failed allocation: clear the placement so a retry re-evaluates.
-	_ = s.unallocate(task, node.Name, nil, false)
+	_ = s.unallocate(task, node.Name, pod_info.NUMAPlacement{}, false)
 }
 
 func (s *Statement) operationValid(i int) bool {

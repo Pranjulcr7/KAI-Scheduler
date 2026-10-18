@@ -226,8 +226,17 @@ spec:
         maxUnavailable: {{ .Values.podgrouper.podDisruptionBudget.maxUnavailable }}
         {{- end }}
       {{- end }}
+    {{- $pgArgs := dict }}
+    {{- range $k, $v := (.Values.podgrouper.args | default dict) }}
+    {{- $_ := set $pgArgs $k $v }}
+    {{- end }}
+    {{- if hasKey .Values.podgrouper "genericKartaFallback" }}
+    {{- $_ := set $pgArgs "genericKartaFallback" .Values.podgrouper.genericKartaFallback }}
+    {{- end }}
+    {{- if $pgArgs }}
     args:
-      genericKartaFallback: {{ .Values.podgrouper.genericKartaFallback }}
+      {{- toYaml $pgArgs | nindent 6 }}
+    {{- end }}
 
   podGroupController:
     service:
@@ -367,11 +376,15 @@ spec:
       port: {{ .Values.scheduler.ports.metricsPort }}
     {{- end }}
 
-  {{- if .Values.prometheus.enabled }}
+  {{- if or .Values.prometheus.enabled .Values.prometheus.serviceMonitor.enabled }}
   prometheus:
-    enabled: true
+    enabled: {{ .Values.prometheus.enabled }}
     {{- if .Values.prometheus.externalPrometheusUrl }}
     externalPrometheusUrl: {{ .Values.prometheus.externalPrometheusUrl | quote }}
+    {{- end }}
+    {{- if .Values.prometheus.serviceMonitor.enabled }}
+    serviceMonitor:
+      enabled: {{ .Values.prometheus.serviceMonitor.enabled }}
     {{- end }}
   {{- end }}
 
