@@ -33,6 +33,10 @@ Administrators choose one GPU-sharing mode for the cluster. The mode configures 
 
 Set the mode with `global.gpuSharingMode`. The legacy `global.gpuSharing` value is deprecated and should only be used for upgrades that still rely on the old boolean value.
 
+### Device plugin `replicas` setting
+
+KAI Scheduler does not currently support the [NVIDIA device plugin `replicas` setting](https://github.com/NVIDIA/k8s-device-plugin#shared-access-to-gpus). Use the GPU-sharing modes above instead.
+
 ### Install without GPU memory enforcement
 
 Use `NonMemoryEnforced` when the scheduler should place fractional GPU pods but the cluster does not need KAI to enforce CUDA memory limits:
@@ -117,7 +121,7 @@ gpu-fractioning:
       effect: NoSchedule
 ```
 
-For air-gapped environments, mirror both the KAI images and the gpu-fractioning chart and images, or vendor the dependency before installing.
+For air-gapped environments, mirror both the KAI images and the gpu-fractioning chart and images, or vendor the dependency before installing. The chart declares gpu-fractioning as a version range rather than a fixed version, so `Chart.yaml` does not name the version to mirror. Each KAI release publishes the version it bundles as the `subcharts.yaml` asset on its [GitHub Release](https://github.com/kai-scheduler/KAI-Scheduler/releases).
 
 ### Runtime class and CDI
 
